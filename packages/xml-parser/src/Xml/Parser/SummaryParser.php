@@ -11,16 +11,20 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
 use DOMNode;
+use Exception;
 use Greenter\Model\Company\Company;
 use Greenter\Model\DocumentInterface;
 use Greenter\Model\Sale\Document;
 use Greenter\Model\Summary\Summary;
 use Greenter\Model\Summary\SummaryDetail;
 use Greenter\Model\Summary\SummaryPerception;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
+use Iterator;
 
 /**
  * Class SummaryParser
@@ -44,6 +48,7 @@ class SummaryParser implements DocumentParserInterface
      * @param mixed $value
      *
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -51,18 +56,19 @@ class SummaryParser implements DocumentParserInterface
         $xml = $this->reader;
         $root = $this->rootNode = $xml->getXpath()->document->documentElement;
 
+        $timeZone = new DateTimeZone(TimeZonePe::DEFAULT);
         $id = explode('-', $xml->getValue('cbc:ID', $root));
         $summary = new Summary();
         $summary->setCorrelativo($id[2])
-            ->setFecGeneracion(new DateTime($xml->getValue('cbc:ReferenceDate', $root)))
-            ->setFecResumen(new DateTime($xml->getValue('cbc:IssueDate', $root)))
+            ->setFecGeneracion(new DateTime($xml->getValue('cbc:ReferenceDate', $root), $timeZone))
+            ->setFecResumen(new DateTime($xml->getValue('cbc:IssueDate', $root), $timeZone))
             ->setCompany($this->getCompany())
             ->setDetails(iterator_to_array($this->getDetails()));
 
         return $summary;
     }
 
-    private function getCompany()
+    private function getCompany(): Company
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:AccountingSupplierParty', $this->rootNode);
@@ -75,7 +81,7 @@ class SummaryParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function getDetails()
+    private function getDetails(): Iterator
     {
         $xml = $this->reader;
         $nodes = $xml->getNodes('sac:SummaryDocumentsLine', $this->rootNode);
@@ -142,6 +148,9 @@ class SummaryParser implements DocumentParserInterface
                 case '03':
                     $detail->setMtoOperInafectas($val);
                     break;
+                case '04':
+                    $detail->setMtoOperExportacion($val);
+                    break;
                 case '05':
                     $detail->setMtoOperGratuitas($val);
                     break;
@@ -159,6 +168,9 @@ class SummaryParser implements DocumentParserInterface
             switch ($name) {
                 case 'IGV':
                     $detail->setMtoIGV($val);
+                    break;
+                case 'IVAP':
+                    $detail->setMtoIvap($val);
                     break;
                 case 'ISC':
                     $detail->setMtoISC($val);
