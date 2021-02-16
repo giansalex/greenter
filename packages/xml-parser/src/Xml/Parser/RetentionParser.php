@@ -11,8 +11,10 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
 use DOMNode;
+use Exception;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
@@ -21,8 +23,10 @@ use Greenter\Model\Retention\Exchange;
 use Greenter\Model\Retention\Payment;
 use Greenter\Model\Retention\Retention;
 use Greenter\Model\Retention\RetentionDetail;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
+use Iterator;
 
 class RetentionParser implements DocumentParserInterface
 {
@@ -39,8 +43,14 @@ class RetentionParser implements DocumentParserInterface
     private $rootNode;
 
     /**
+     * @var DateTimeZone
+     */
+    private $timezone;
+
+    /**
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -48,11 +58,12 @@ class RetentionParser implements DocumentParserInterface
         $xml = $this->reader;
         $root = $this->rootNode = $xml->getXpath()->document->documentElement;
 
+        $this->timezone = new DateTimeZone(TimeZonePe::DEFAULT);
         $idNum = explode('-', $xml->getValue('cbc:ID'));
         $retention = new Retention();
         $retention->setSerie($idNum[0])
             ->setCorrelativo($idNum[1])
-            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate')))
+            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate'), $this->timezone))
             ->setCompany($this->getCompany())
             ->setProveedor($this->getClient())
             ->setRegimen($xml->getValue('sac:SUNATRetentionSystemCode'))
@@ -65,7 +76,7 @@ class RetentionParser implements DocumentParserInterface
         return $retention;
     }
 
-    private function getCompany()
+    private function getCompany(): Company
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:AgentParty', $this->rootNode);
@@ -79,7 +90,7 @@ class RetentionParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function getClient()
+    private function getClient(): Client
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:ReceiverParty', $this->rootNode);
@@ -97,7 +108,7 @@ class RetentionParser implements DocumentParserInterface
     /**
      * @param DOMElement|null $node
      */
-    private function getAddress(?DOMElement $node)
+    private function getAddress(?DOMElement $node): ?Address
     {
         $xml = $this->reader;
 
@@ -114,7 +125,7 @@ class RetentionParser implements DocumentParserInterface
         return null;
     }
 
-    private function getDetails()
+    private function getDetails(): Iterator
     {
         $xml = $this->reader;
         $nodes = $xml->getNodes('sac:SUNATRetentionDocumentReference', $this->rootNode);
@@ -126,7 +137,7 @@ class RetentionParser implements DocumentParserInterface
             $det = new RetentionDetail();
             $det->setTipoDoc($temp->getAttribute('schemeID'))
                 ->setNumDoc($temp->nodeValue)
-                ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $node)))
+                ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $node), $this->timezone))
                 ->setImpTotal((float)$mount->nodeValue)
                 ->setMoneda($mount->getAttribute('currencyID'))
                 ->setPagos(iterator_to_array($this->getPayments($node)));
@@ -134,8 +145,7 @@ class RetentionParser implements DocumentParserInterface
             $temp = $xml->getNode('sac:SUNATRetentionInformation', $node);
             if (empty($temp)) {
                 $det->setImpRetenido(0.00)
-                    ->setImpPagar(0.00)
-                    ->setFechaRetencion(new DateTime());
+                    ->setImpPagar(0.00);
 
                 yield $det;
                 continue;
@@ -143,7 +153,7 @@ class RetentionParser implements DocumentParserInterface
 
             $det
                 ->setImpRetenido((float)$xml->getValue('sac:SUNATRetentionAmount', $temp))
-                ->setFechaRetencion(new DateTime($xml->getValue('sac:SUNATRetentionDate', $temp)))
+                ->setFechaRetencion(new DateTime($xml->getValue('sac:SUNATRetentionDate', $temp), $this->timezone))
                 ->setImpPagar((float)$xml->getValue('sac:SUNATNetTotalPaid', $temp));
 
             $cambio = $xml->getNode('cac:ExchangeRate', $temp);
@@ -152,7 +162,7 @@ class RetentionParser implements DocumentParserInterface
                 $exc->setMonedaRef($xml->getValue('cbc:SourceCurrencyCode', $cambio))
                     ->setMonedaObj($xml->getValue('cbc:TargetCurrencyCode', $cambio))
                     ->setFactor((float)$xml->getValue('cbc:CalculationRate', $cambio, '0'))
-                    ->setFecha(new DateTime($xml->getValue('cbc:Date', $cambio)));
+                    ->setFecha(new DateTime($xml->getValue('cbc:Date', $cambio), $this->timezone));
                 $det->setTipoCambio($exc);
             }
 
@@ -160,7 +170,7 @@ class RetentionParser implements DocumentParserInterface
         }
     }
 
-    private function getPayments(DOMNode $node)
+    private function getPayments(DOMNode $node): Iterator
     {
         $xml = $this->reader;
 
@@ -170,7 +180,7 @@ class RetentionParser implements DocumentParserInterface
             $payment = new Payment();
             $payment->setMoneda($temp->getAttribute('currencyID'))
                 ->setImporte((float)$temp->nodeValue)
-                ->setFecha(new DateTime($xml->getValue('cbc:PaidDate')));
+                ->setFecha(new DateTime($xml->getValue('cbc:PaidDate'), $this->timezone));
 
             yield $payment;
         }
