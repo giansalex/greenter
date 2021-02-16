@@ -11,8 +11,10 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
 use DOMNode;
+use Exception;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
@@ -22,6 +24,7 @@ use Greenter\Model\Sale\Legend;
 use Greenter\Model\Sale\Note;
 use Greenter\Model\Sale\SaleDetail;
 use Greenter\Model\Sale\SalePerception;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
 
@@ -46,6 +49,7 @@ class NoteParser implements DocumentParserInterface
     /**
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -55,6 +59,7 @@ class NoteParser implements DocumentParserInterface
 
         $isNcr = $root->nodeName == 'CreditNote';
 
+        $timeZone = new DateTimeZone(TimeZonePe::DEFAULT);
         $note = new Note();
         $idNum = explode('-', $xml->getValue('cbc:ID', $root));
         $this->loadDocAfectado($note);
@@ -64,7 +69,7 @@ class NoteParser implements DocumentParserInterface
             ->setCorrelativo($idNum[1])
             ->setTipoDoc($isNcr ? '07' : '08')
             ->setTipoMoneda($xml->getValue('cbc:DocumentCurrencyCode', $root))
-            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root)))
+            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root), $timeZone))
             ->setCompany($this->getCompany())
             ->setClient($this->getClient());
 
