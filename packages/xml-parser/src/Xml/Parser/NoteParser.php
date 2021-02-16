@@ -58,7 +58,9 @@ class NoteParser implements DocumentParserInterface
         $note = new Note();
         $idNum = explode('-', $xml->getValue('cbc:ID', $root));
         $this->loadDocAfectado($note);
-        $note->setSerie($idNum[0])
+        $note
+            ->setUblVersion($xml->getValue('cbc:UBLVersionID', $root))
+            ->setSerie($idNum[0])
             ->setCorrelativo($idNum[1])
             ->setTipoDoc($isNcr ? '07' : '08')
             ->setTipoMoneda($xml->getValue('cbc:DocumentCurrencyCode', $root))

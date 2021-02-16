@@ -43,8 +43,10 @@ class InvoiceParser implements DocumentParserInterface
     {
         $xpt = $this->getXpath($value);
         $inv = new Invoice();
+
         $docFac = explode('-', $this->defValue($xpt->query('/xt:Invoice/cbc:ID')));
-        $inv->setSerie($docFac[0])
+        $inv->setUblVersion($this->defValue($xpt->query('/xt:Invoice/cbc:UBLVersionID')))
+            ->setSerie($docFac[0])
             ->setCorrelativo($docFac[1])
             ->setTipoDoc($this->defValue($xpt->query('/xt:Invoice/cbc:InvoiceTypeCode')))
             ->setTipoMoneda($this->defValue($xpt->query('/xt:Invoice/cbc:DocumentCurrencyCode')))
