@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
@@ -27,6 +28,7 @@ use Greenter\Model\Sale\Legend;
 use Greenter\Model\Sale\Prepayment;
 use Greenter\Model\Sale\SaleDetail;
 use Greenter\Model\Sale\SalePerception;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 
 /**
@@ -44,13 +46,14 @@ class InvoiceParser implements DocumentParserInterface
         $xpt = $this->getXpath($value);
         $inv = new Invoice();
 
+        $timeZone = new DateTimeZone(TimeZonePe::DEFAULT);
         $docFac = explode('-', $this->defValue($xpt->query('/xt:Invoice/cbc:ID')));
         $inv->setUblVersion($this->defValue($xpt->query('/xt:Invoice/cbc:UBLVersionID')))
             ->setSerie($docFac[0])
             ->setCorrelativo($docFac[1])
             ->setTipoDoc($this->defValue($xpt->query('/xt:Invoice/cbc:InvoiceTypeCode')))
             ->setTipoMoneda($this->defValue($xpt->query('/xt:Invoice/cbc:DocumentCurrencyCode')))
-            ->setFechaEmision(new DateTime($this->defValue($xpt->query('/xt:Invoice/cbc:IssueDate'))))
+            ->setFechaEmision(new DateTime($this->defValue($xpt->query('/xt:Invoice/cbc:IssueDate')), $timeZone))
             ->setCompany($this->getCompany($xpt))
             ->setClient($this->getClient($xpt));
 
