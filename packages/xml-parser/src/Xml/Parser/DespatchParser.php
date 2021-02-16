@@ -11,7 +11,9 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
+use Exception;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Company;
 use Greenter\Model\Despatch\Despatch;
@@ -21,12 +23,13 @@ use Greenter\Model\Despatch\Shipment;
 use Greenter\Model\Despatch\Transportist;
 use Greenter\Model\DocumentInterface;
 use Greenter\Model\Sale\Document;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
+use Iterator;
 
 /**
  * Class DespatchParser
- * @package Greenter\Xml\Parser
  */
 class DespatchParser implements DocumentParserInterface
 {
@@ -43,8 +46,14 @@ class DespatchParser implements DocumentParserInterface
     private $rootNode;
 
     /**
+     * @var DateTimeZone
+     */
+    private $timezone;
+
+    /**
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -52,13 +61,14 @@ class DespatchParser implements DocumentParserInterface
         $xml = $this->reader;
         $root = $this->rootNode = $xml->getXpath()->document->documentElement;
 
+        $this->timezone = new DateTimeZone(TimeZonePe::DEFAULT);
         $guia = new Despatch();
         $docGuia = explode('-', $xml->getValue('cbc:ID', $root));
         $guia->setSerie($docGuia[0])
             ->setCorrelativo($docGuia[1])
             ->setTipoDoc($xml->getValue('cbc:DespatchAdviceTypeCode', $root))
             ->setObservacion($xml->getValue('cbc:Note', $root))
-            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root)))
+            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root), $this->timezone))
             ->setCompany($this->getCompany())
             ->setDestinatario($this->getClient('cac:DeliveryCustomerParty'))
             ->setTercero($this->getClient('cac:SellerSupplierParty'))
@@ -70,7 +80,7 @@ class DespatchParser implements DocumentParserInterface
         return $guia;
     }
 
-    private function getClient(string $nodeName)
+    private function getClient(string $nodeName): ?Client
     {
         $xml = $this->reader;
         $node = $xml->getNode($nodeName, $this->rootNode);
@@ -88,7 +98,7 @@ class DespatchParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function getCompany()
+    private function getCompany(): Company
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:DespatchSupplierParty', $this->rootNode);
@@ -100,7 +110,7 @@ class DespatchParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function loadRelDocs(Despatch $despatch)
+    private function loadRelDocs(Despatch $despatch): void
     {
         $xml = $this->reader;
         $bajaNode = $xml->getNode('cac:OrderReference', $this->rootNode);
@@ -119,7 +129,7 @@ class DespatchParser implements DocumentParserInterface
         }
     }
 
-    private function getShipment()
+    private function getShipment(): Shipment
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:Shipment', $this->rootNode);
@@ -148,16 +158,13 @@ class DespatchParser implements DocumentParserInterface
 
         $otNode = $xml->getNode('cac:ShipmentStage', $node);
         $shp->setModTraslado($xml->getValue('cbc:TransportModeCode', $otNode))
-            ->setFecTraslado(new DateTime($xml->getValue('cac:TransitPeriod/cbc:StartDate', $otNode)))
+            ->setFecTraslado(new DateTime($xml->getValue('cac:TransitPeriod/cbc:StartDate', $otNode), $this->timezone))
             ->setTransportista($this->getTransportista($otNode));
 
         return $shp;
     }
 
-    /**
-     * @param DOMElement|null $node
-     */
-    private function getTransportista(?DOMElement $node)
+    private function getTransportista(?DOMElement $node): Transportist
     {
         $xml = $this->reader;
         $trans = new Transportist();
@@ -180,7 +187,7 @@ class DespatchParser implements DocumentParserInterface
         return $trans;
     }
 
-    private function getDetails()
+    private function getDetails(): Iterator
     {
         $xml = $this->reader;
         $nodes = $xml->getNodes('cac:DespatchLine', $this->rootNode);
