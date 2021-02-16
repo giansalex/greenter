@@ -11,8 +11,10 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
 use DOMNode;
+use Exception;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
@@ -21,6 +23,7 @@ use Greenter\Model\Perception\Perception;
 use Greenter\Model\Perception\PerceptionDetail;
 use Greenter\Model\Retention\Exchange;
 use Greenter\Model\Retention\Payment;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
 
@@ -43,8 +46,14 @@ class PerceptionParser implements DocumentParserInterface
     private $rootNode;
 
     /**
+     * @var DateTimeZone
+     */
+    private $timezone;
+
+    /**
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -52,11 +61,12 @@ class PerceptionParser implements DocumentParserInterface
         $xml = $this->reader;
         $root = $this->rootNode = $xml->getXpath()->document->documentElement;
 
+        $this->timezone = new DateTimeZone(TimeZonePe::DEFAULT);
         $idNum = explode('-', $xml->getValue('cbc:ID'));
         $perception = new Perception();
         $perception->setSerie($idNum[0])
             ->setCorrelativo($idNum[1])
-            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate')))
+            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate'), $this->timezone))
             ->setCompany($this->getCompany())
             ->setProveedor($this->getClient())
             ->setRegimen($xml->getValue('sac:SUNATPerceptionSystemCode'))
@@ -130,7 +140,7 @@ class PerceptionParser implements DocumentParserInterface
             $det = new PerceptionDetail();
             $det->setTipoDoc($temp->getAttribute('schemeID'))
                 ->setNumDoc($temp->nodeValue)
-                ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $node)))
+                ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $node), $this->timezone))
                 ->setImpTotal((float)$mount->nodeValue)
                 ->setMoneda($mount->getAttribute('currencyID'))
                 ->setCobros(iterator_to_array($this->getPayments($node)));
@@ -138,8 +148,7 @@ class PerceptionParser implements DocumentParserInterface
             $temp = $xml->getNode('sac:SUNATPerceptionInformation', $node);
             if (empty($temp)) {
                 $det->setImpPercibido(0.00)
-                    ->setImpCobrar(0.00)
-                    ->setFechaPercepcion(new DateTime());
+                    ->setImpCobrar(0.00);
 
                 yield $det;
                 continue;
@@ -147,7 +156,7 @@ class PerceptionParser implements DocumentParserInterface
 
             $det
                 ->setImpPercibido((float)$xml->getValue('sac:SUNATPerceptionAmount', $temp))
-                ->setFechaPercepcion(new DateTime($xml->getValue('sac:SUNATPerceptionDate', $temp)))
+                ->setFechaPercepcion(new DateTime($xml->getValue('sac:SUNATPerceptionDate', $temp), $this->timezone))
                 ->setImpCobrar((float)$xml->getValue('sac:SUNATNetTotalCashed', $temp));
 
             $cambio = $xml->getNode('cac:ExchangeRate', $temp);
@@ -156,7 +165,7 @@ class PerceptionParser implements DocumentParserInterface
                 $exc->setMonedaRef($xml->getValue('cbc:SourceCurrencyCode', $cambio))
                     ->setMonedaObj($xml->getValue('cbc:TargetCurrencyCode', $cambio))
                     ->setFactor((float)$xml->getValue('cbc:CalculationRate', $cambio, '0'))
-                    ->setFecha(new DateTime($xml->getValue('cbc:Date', $cambio)));
+                    ->setFecha(new DateTime($xml->getValue('cbc:Date', $cambio), $this->timezone));
                 $det->setTipoCambio($exc);
             }
 
@@ -174,7 +183,7 @@ class PerceptionParser implements DocumentParserInterface
             $payment = new Payment();
             $payment->setMoneda($temp->getAttribute('currencyID'))
                 ->setImporte((float)$temp->nodeValue)
-                ->setFecha(new DateTime($xml->getValue('cbc:PaidDate')));
+                ->setFecha(new DateTime($xml->getValue('cbc:PaidDate'), $this->timezone));
 
             yield $payment;
         }
