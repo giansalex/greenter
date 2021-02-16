@@ -11,12 +11,15 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
 use DOMElement;
+use Exception;
 use Greenter\Model\Client\Client;
 use Greenter\Model\Company\Address;
 use Greenter\Model\Company\Company;
 use Greenter\Model\DocumentInterface;
 use Greenter\Model\Sale\Receipt;
+use Greenter\Model\TimeZonePe;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
 
@@ -43,6 +46,7 @@ class ReceiptParser implements DocumentParserInterface
      *
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -50,11 +54,12 @@ class ReceiptParser implements DocumentParserInterface
         $xml = $this->reader;
         $root = $this->rootNode = $xml->getXpath()->document->documentElement;
 
+        $timezone = new DateTimeZone(TimeZonePe::DEFAULT);
         $receipt = new Receipt();
         $docFac = explode('-', $xml->getValue('cbc:ID', $root));
         $receipt->setSerie($docFac[0])
             ->setCorrelativo($docFac[1])
-            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root)))
+            ->setFechaEmision(new DateTime($xml->getValue('cbc:IssueDate', $root), $timezone))
             ->setMontoLetras($xml->getValue('cbc:Note', $root))
             ->setPerson($this->getPerson())
             ->setReceptor($this->getClient());
@@ -69,7 +74,7 @@ class ReceiptParser implements DocumentParserInterface
         return $receipt;
     }
 
-    private function getClient()
+    private function getClient(): Client
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:AccountingCustomerParty', $this->rootNode);
@@ -83,7 +88,7 @@ class ReceiptParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function getPerson()
+    private function getPerson(): Company
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:AccountingSupplierParty', $this->rootNode);
@@ -96,10 +101,7 @@ class ReceiptParser implements DocumentParserInterface
         return $cl;
     }
 
-    /**
-     * @param DOMElement|null $node
-     */
-    private function getAddress(?DOMElement $node)
+    private function getAddress(?DOMElement $node): Address
     {
         $xml = $this->reader;
         $address = new Address();
@@ -108,7 +110,7 @@ class ReceiptParser implements DocumentParserInterface
         return $address;
     }
 
-    private function loadFromDetail(Receipt $receipt)
+    private function loadFromDetail(Receipt $receipt): void
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:InvoiceLine', $this->rootNode);
