@@ -11,13 +11,18 @@ declare(strict_types=1);
 namespace Greenter\Xml\Parser;
 
 use DateTime;
+use DateTimeZone;
+use DOMElement;
+use Exception;
 use Greenter\Model\Company\Company;
 use Greenter\Model\DocumentInterface;
+use Greenter\Model\TimeZonePe;
 use Greenter\Model\Voided\Reversion;
 use Greenter\Model\Voided\Voided;
 use Greenter\Model\Voided\VoidedDetail;
 use Greenter\Parser\DocumentParserInterface;
 use Greenter\Xml\XmlReader;
+use Iterator;
 
 /**
  * Class VoidedParser
@@ -33,13 +38,14 @@ class VoidedParser implements DocumentParserInterface
     private $reader;
 
     /**
-     * @var \DOMElement
+     * @var DOMElement
      */
     private $rootNode;
 
     /**
      * @param mixed $value
      * @return DocumentInterface
+     * @throws Exception
      */
     public function parse($value): ?DocumentInterface
     {
@@ -49,17 +55,18 @@ class VoidedParser implements DocumentParserInterface
 
         $id = explode('-', $xml->getValue('cbc:ID', $root));
 
+        $timeZone = new DateTimeZone(TimeZonePe::DEFAULT);
         $voided = $id[0] == 'RA' ? new Voided() : new Reversion();
         $voided->setCorrelativo($id[2])
-            ->setFecGeneracion(new DateTime($xml->getValue('cbc:ReferenceDate', $root)))
-            ->setFecComunicacion(new DateTime($xml->getValue('cbc:IssueDate', $root)))
+            ->setFecGeneracion(new DateTime($xml->getValue('cbc:ReferenceDate', $root), $timeZone))
+            ->setFecComunicacion(new DateTime($xml->getValue('cbc:IssueDate', $root), $timeZone))
             ->setCompany($this->getCompany())
             ->setDetails(iterator_to_array($this->getDetails()));
 
         return $voided;
     }
 
-    private function getCompany()
+    private function getCompany(): Company
     {
         $xml = $this->reader;
         $node = $xml->getNode('cac:AccountingSupplierParty', $this->rootNode);
@@ -72,7 +79,7 @@ class VoidedParser implements DocumentParserInterface
         return $cl;
     }
 
-    private function getDetails()
+    private function getDetails(): Iterator
     {
         $xml = $this->reader;
         $nodes = $xml->getNodes('sac:VoidedDocumentsLine', $this->rootNode);
