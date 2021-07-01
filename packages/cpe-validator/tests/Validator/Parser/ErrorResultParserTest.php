@@ -25,8 +25,9 @@ class ErrorResultParserTest extends TestCase
         $message = 'xxx';
         $result = $this->parser->parse($message);
 
-
-        $this->assertNull($result);
+        $this->assertNotNull($result);
+        $this->assertEquals('-1', $result->getCode());
+        $this->assertEquals($message, $result->getMessage());
     }
 
     public function testParse()

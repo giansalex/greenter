@@ -15,7 +15,9 @@ class ErrorResultParser implements ResultParserInterface
 
         $len = count($parts);
         if ($len < 3) {
-            return null;
+            return (new CpeError())
+                ->setCode('-1')
+                ->setMessage($raw);
         }
 
         $error = (new CpeError())
